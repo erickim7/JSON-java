@@ -28,6 +28,8 @@ import java.util.ResourceBundle;
 import java.util.Set;
 import java.util.regex.Pattern;
 
+import com.fasterxml.jackson.annotation.JsonValue;
+
 /**
  * A JSONObject is an unordered collection of name/value pairs. Its external
  * form is a string wrapped in curly braces with colons between the names and
@@ -1159,7 +1161,7 @@ public class JSONObject {
     static BigDecimal objectToBigDecimal(Object val, BigDecimal defaultValue) {
         return objectToBigDecimal(val, defaultValue, true);
     }
-    
+
     /**
      * @param val value to convert
      * @param defaultValue default value to return is the conversion doesn't work or is null.
@@ -1537,12 +1539,12 @@ public class JSONObject {
                         final Object result = method.invoke(bean);
                         if (result != null) {
                             // check cyclic dependency and throw error if needed
-                            // the wrap and populateMap combination method is 
+                            // the wrap and populateMap combination method is
                             // itself DFS recursive
                             if (objectsRecord.contains(result)) {
                                 throw recursivelyDefinedObjectException(key);
                             }
-                            
+
                             objectsRecord.add(result);
 
                             this.map.put(key, wrap(result, objectsRecord));
@@ -1551,7 +1553,7 @@ public class JSONObject {
 
                             // we don't use the result anywhere outside of wrap
                             // if it's a resource we should be sure to close it
-                            // after calling toString 
+                            // after calling toString
                             if (result instanceof Closeable) {
                                 try {
                                     ((Closeable) result).close();
@@ -2535,7 +2537,7 @@ public class JSONObject {
         } else if (value instanceof Boolean) {
             writer.write(value.toString());
         } else if (value instanceof Enum<?>) {
-            writer.write(quote(((Enum<?>)value).name()));
+            writer.write(quote(getEnumStringValue((Enum<?>)value)));
         } else if (value instanceof JSONObject) {
             ((JSONObject) value).write(writer, indentFactor, indent);
         } else if (value instanceof JSONArray) {
@@ -2552,6 +2554,27 @@ public class JSONObject {
             quote(value.toString(), writer);
         }
         return writer;
+    }
+
+    static final String getEnumStringValue(Enum<?> value) throws JSONException {
+        boolean found = false;
+        String ret = null;
+        for(Method m : value.getClass().getMethods()) {
+            JsonValue[] annotation = m.getAnnotationsByType(JsonValue.class);
+            if(annotation != null && annotation.length > 0){
+                found = true;
+                try {
+                    ret = (String) m.invoke(value, new Object[]{});
+                } catch (IllegalAccessException e) {
+                    throw new JSONException(e);
+                } catch (IllegalArgumentException e) {
+                    throw new JSONException(e);
+                } catch (InvocationTargetException e) {
+                    throw new JSONException(e);
+                }
+            }
+        }
+        return found? ret: value.name();
     }
 
     static final void indent(Writer writer, int indent) throws IOException {
